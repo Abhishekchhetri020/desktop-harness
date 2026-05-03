@@ -899,6 +899,87 @@ def t_batch_actions(actions: list[dict]):
     return _ok({"results": batch_actions(actions)})
 
 
+# --- vision tier (v0.4.0 — beats computer-use on Electron apps) ------------
+
+
+@tool(
+    "smart_click",
+    "**The default click tool**. Auto-falls-through AX → OCR → vision. ONE call, "
+    "the tool picks the right tier. Reports which tier won. Skips AX entirely "
+    "for known Electron apps (Obsidian, Slack, VS Code, Discord, Notion, Figma, "
+    "Linear, Cursor, Spotify, ...) — saves ~2s per call on those.",
+    {"type": "object", "properties": {
+        "target": {"type": "string", "description": "Visible text or accessible name of the thing to click"},
+        "app": {"type": "string", "description": "Optional app name; lets the tier picker classify"},
+        "case_insensitive": {"type": "boolean"},
+    }, "required": ["target"]},
+)
+def t_smart_click(target: str, app: str | None = None, case_insensitive: bool = True):
+    from .vision import smart_click
+    return _ok(smart_click(target, app=app, case_insensitive=case_insensitive))
+
+
+@tool(
+    "vision_act",
+    "Return everything an agent needs to act visually: grid-overlay screenshot "
+    "(base64 PNG, A1..L12 cells), OCR text+coords, AX summary if available, and "
+    "next-step recommendations. Use when AX returns nothing OR the app is unknown.",
+    {"type": "object", "properties": {
+        "task": {"type": "string", "description": "Describe what you're trying to do"},
+        "app": {"type": "string"},
+        "grid": {"type": "integer", "description": "NxN cells (default 12)"},
+    }, "required": ["task"]},
+)
+def t_vision_act(task: str, app: str | None = None, grid: int = 12):
+    from .vision import vision_act
+    return _ok(vision_act(task, app=app, grid=grid))
+
+
+@tool(
+    "screenshot_with_grid",
+    "Capture a screenshot with a labeled coordinate grid burnt in (cells A1..L12). "
+    "Returns base64 PNG + cells dict mapping each label to (x, y) center. "
+    "Use to give a vision-capable model deterministic click targets.",
+    {"type": "object", "properties": {
+        "app": {"type": "string"},
+        "grid": {"type": "integer"},
+        "path": {"type": "string"},
+    }},
+)
+def t_screenshot_with_grid(app: str | None = None, grid: int = 12, path: str | None = None):
+    from .vision import screenshot_with_grid
+    snap = screenshot_with_grid(app=app, grid=grid, path=path)
+    # Strip the giant base64 from the default response — agent can ask for it via include_image
+    snap_lite = {k: v for k, v in snap.items() if k != "base64"}
+    snap_lite["base64_size_bytes"] = len(snap.get("base64") or "")
+    return _ok(snap_lite)
+
+
+@tool(
+    "click_cell",
+    "Click the center of a labeled grid cell from screenshot_with_grid (e.g. 'G7').",
+    {"type": "object", "properties": {
+        "label": {"type": "string"},
+        "grid": {"type": "integer"},
+        "app": {"type": "string"},
+    }, "required": ["label"]},
+)
+def t_click_cell(label: str, grid: int = 12, app: str | None = None):
+    from .vision import click_cell
+    return _ok(click_cell(label, grid=grid, app=app))
+
+
+@tool(
+    "app_class",
+    "Classify an app: electron / applescript / native_ax / unknown. "
+    "Use to decide tier before calling other tools.",
+    {"type": "object", "properties": {"app": {"type": "string"}}, "required": ["app"]},
+)
+def t_app_class(app: str):
+    from .vision import app_class
+    return _ok({"app": app, "class": app_class(app)})
+
+
 # --- JSON-RPC dispatcher ---------------------------------------------------
 
 

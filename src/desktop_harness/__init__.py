@@ -4,7 +4,7 @@ Public API is the union of these modules; the CLI exposes them as a flat namespa
 so `desktop-harness -c 'click_element(find("Notes", role="AXButton", title="New Note"))'`
 just works without imports.
 """
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 from .apps import (
     list_apps, frontmost, open_app, activate, quit_app, is_running,
@@ -48,6 +48,10 @@ from .snapshot import (
     accessibility_snapshot, click_text, scrape_app, batch_actions,
     lookup_ref, clear_refs, INTERACTIVE_ROLES,
 )
+from .vision import (
+    app_class, is_electron, screenshot_with_grid, click_cell,
+    smart_click, vision_act, ELECTRON_APPS, APPLESCRIPT_APPS,
+)
 from .errors import (
     DesktopHarnessError, AccessibilityNotGranted, ScreenRecordingNotGranted,
     AutomationNotGranted, InputMonitoringNotGranted, AppNotRunning,
@@ -88,6 +92,9 @@ __all__ = [
     # snapshot (v0.3.0)
     "accessibility_snapshot", "click_text", "scrape_app", "batch_actions",
     "lookup_ref", "clear_refs", "INTERACTIVE_ROLES",
+    # vision tier (v0.4.0) — auto-falls-through, beats computer-use on Electron
+    "app_class", "is_electron", "screenshot_with_grid", "click_cell",
+    "smart_click", "vision_act", "ELECTRON_APPS", "APPLESCRIPT_APPS",
     # errors
     "DesktopHarnessError", "AccessibilityNotGranted", "ScreenRecordingNotGranted",
     "AutomationNotGranted", "InputMonitoringNotGranted", "AppNotRunning",

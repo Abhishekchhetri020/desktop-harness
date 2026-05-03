@@ -3,6 +3,37 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] — 2026-05-03
+
+### Added — the vision tier (closes the Electron gap vs computer-use)
+- **`smart_click(target, app=?)`** — the new default click tool. Auto-falls-
+  through AX → OCR → vision. ONE call, the harness picks the right tier and
+  reports which won. Saves ~2s per call on Electron apps by skipping the
+  doomed AX tries entirely.
+- **`app_class(app)`** + **`ELECTRON_APPS`** registry — classifies apps as
+  `electron`/`applescript`/`native_ax`/`unknown`. Obsidian, Slack, VS Code,
+  Discord, Notion, Figma, Linear, Cursor, Spotify, Warp, Arc, Zoom,
+  Perplexity, Claude desktop are all flagged Electron and skip AX.
+- **`screenshot_with_grid(app=?, grid=12)`** — captures a screenshot with a
+  labeled NxN coordinate grid burnt in (cells A1..L12 by default). Returns
+  base64 PNG + a `cells` dict mapping each label to its (x,y) center pixel.
+  The agent says "click G7" and we resolve to coords deterministically.
+- **`click_cell(label, ...)`** — click the center of a labeled cell.
+- **`vision_act(task, app=?)`** — wraps everything the agent needs to act
+  visually: grid screenshot, OCR text+coords, AX summary if available, and
+  heuristic next-step recommendations. Use when AX returns nothing.
+- 5 new MCP tools (now 64 total).
+
+### Background
+
+The v0.3.0 Obsidian test took 7 minutes because the agent (me) kept retrying
+AX queries on a sparse Electron tree. computer-use was faster because it
+goes pixel-first. v0.4.0 closes that gap by giving the agent ONE primitive
+(`smart_click`) that auto-picks the right tier per app, and ONE primitive
+(`vision_act`) that hands back a screenshot the model can reason about
+visually with ready-made click coords. Native apps still get the AX fast
+path; Electron apps go straight to vision.
+
 ## [0.3.0] — 2026-05-03
 
 ### Added
