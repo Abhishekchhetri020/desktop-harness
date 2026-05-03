@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] — 2026-05-03
+
+### Added
+- **`accessibility_snapshot`** — one-shot, structured JSON of every interactive
+  element in an app, with stable refs (`ax_42`) you can pass to `ax_click` /
+  `ax_get_value` / `ax_set_value`. The headline ergonomic upgrade: an LLM gets
+  a compact, navigable view of the UI in one MCP call instead of needing to
+  walk the tree node by node. Inspired by Playwright MCP's snapshot mode.
+- **`click_text`** — hybrid AX + OCR helper. If `app` is given, finds the
+  element whose title/value contains a needle and clicks via AX. Otherwise
+  OCRs the screen and clicks the matched pixel center. The "just click the
+  thing that says X" primitive every agent needs.
+- **`scrape_app`** — extract an app's visible text content as Markdown by
+  walking the AX tree (windows → headings, static text → paragraphs,
+  text fields → fenced code blocks). Mirror of macOS-MCP's `Scrape` tool.
+- **`batch_actions`** — run multiple actions sequentially in ONE MCP call.
+  Cuts roundtrip latency for predictable sequences (click → type → enter).
+  Stops on first failure unless `continue_on_error: true`.
+- 4 new MCP tools (now 59 total).
+
 ## [0.2.0] — 2026-05-03
 
 ### Added

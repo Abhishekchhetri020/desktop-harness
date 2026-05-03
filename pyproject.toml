@@ -1,6 +1,6 @@
 [project]
 name = "desktop-harness"
-version = "0.2.0"
+version = "0.3.0"
 description = "Drive any macOS app from CLI or LLM agent. AX-tree-aware (the DOM equivalent for native apps), with first-class MCP server, action recorder, and live event observers."
 readme = "README.md"
 requires-python = ">=3.11"

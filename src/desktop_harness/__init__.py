@@ -4,7 +4,7 @@ Public API is the union of these modules; the CLI exposes them as a flat namespa
 so `desktop-harness -c 'click_element(find("Notes", role="AXButton", title="New Note"))'`
 just works without imports.
 """
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from .apps import (
     list_apps, frontmost, open_app, activate, quit_app, is_running,
@@ -44,6 +44,10 @@ from .observers import (
     observe, unobserve, list_observers, stop_all, observing, wait_for,
 )
 from .recorder import Recorder
+from .snapshot import (
+    accessibility_snapshot, click_text, scrape_app, batch_actions,
+    lookup_ref, clear_refs, INTERACTIVE_ROLES,
+)
 from .errors import (
     DesktopHarnessError, AccessibilityNotGranted, ScreenRecordingNotGranted,
     AutomationNotGranted, InputMonitoringNotGranted, AppNotRunning,
@@ -81,6 +85,9 @@ __all__ = [
     "observe", "unobserve", "list_observers", "stop_all", "observing", "wait_for",
     # recorder
     "Recorder",
+    # snapshot (v0.3.0)
+    "accessibility_snapshot", "click_text", "scrape_app", "batch_actions",
+    "lookup_ref", "clear_refs", "INTERACTIVE_ROLES",
     # errors
     "DesktopHarnessError", "AccessibilityNotGranted", "ScreenRecordingNotGranted",
     "AutomationNotGranted", "InputMonitoringNotGranted", "AppNotRunning",

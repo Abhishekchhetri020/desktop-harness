@@ -823,6 +823,82 @@ def t_version():
     return _ok({"version": __version__, "tool_count": len(TOOLS)})
 
 
+# --- snapshot / scrape / batch (v0.3.0 — the macOS-MCP-style headline) -----
+
+
+@tool(
+    "accessibility_snapshot",
+    "ONE-CALL structured JSON of every interactive element in an app. "
+    "Each element has a stable `ref` (e.g. ax_42) you can pass to ax_click/"
+    "ax_get_value/ax_set_value. Compact + LLM-friendly. Prefer this over ax_dump "
+    "when you need to act, not just inspect.",
+    {"type": "object", "properties": {
+        "app": {"type": "string"},
+        "max_elements": {"type": "integer"},
+        "max_depth": {"type": "integer"},
+        "interactive_only": {"type": "boolean"},
+        "include_static_text": {"type": "boolean"},
+    }, "required": ["app"]},
+)
+def t_accessibility_snapshot(app: str, max_elements: int = 500, max_depth: int = 30,
+                             interactive_only: bool = True, include_static_text: bool = True):
+    from .snapshot import accessibility_snapshot, _REGISTRY
+    snap = accessibility_snapshot(
+        app, max_elements=max_elements, max_depth=max_depth,
+        interactive_only=interactive_only, include_static_text=include_static_text,
+    )
+    # Refs registered into snapshot._REGISTRY are the same source of truth as
+    # the mcp_server's local _AX_REFS — sync them so subsequent ax_click works.
+    for ref, el in _REGISTRY.items():
+        _AX_REFS[ref] = el
+    return _ok(snap)
+
+
+@tool(
+    "click_text",
+    "Hybrid: click the element whose title/value contains `needle`. If `app` "
+    "is given, tries AX find first; otherwise OCRs the screen and clicks the "
+    "matched text's pixel center.",
+    {"type": "object", "properties": {
+        "needle": {"type": "string"},
+        "app": {"type": "string"},
+        "case_insensitive": {"type": "boolean"},
+    }, "required": ["needle"]},
+)
+def t_click_text(needle: str, app: str | None = None, case_insensitive: bool = True):
+    from .snapshot import click_text
+    return _ok({"clicked": click_text(needle, app=app, case_insensitive=case_insensitive)})
+
+
+@tool(
+    "scrape_app",
+    "Extract an app's visible text content as Markdown. Useful for reading mail, "
+    "notes, web articles in Safari, transcripts, etc.",
+    {"type": "object", "properties": {
+        "app": {"type": "string"},
+        "max_chars": {"type": "integer"},
+        "max_depth": {"type": "integer"},
+    }, "required": ["app"]},
+)
+def t_scrape_app(app: str, max_chars: int = 50000, max_depth: int = 30):
+    from .snapshot import scrape_app
+    return _ok({"markdown": scrape_app(app, max_chars=max_chars, max_depth=max_depth)})
+
+
+@tool(
+    "batch_actions",
+    "Run multiple actions sequentially in ONE MCP call. Cuts roundtrip latency. "
+    "Stops on first failure unless an action sets continue_on_error=true. "
+    "Each action: {action: 'click'|'type_text'|'key_press'|'scroll'|'ax_click'|'ax_set_value'|'sleep'|'screenshot', ...}",
+    {"type": "object", "properties": {
+        "actions": {"type": "array", "items": {"type": "object"}},
+    }, "required": ["actions"]},
+)
+def t_batch_actions(actions: list[dict]):
+    from .snapshot import batch_actions
+    return _ok({"results": batch_actions(actions)})
+
+
 # --- JSON-RPC dispatcher ---------------------------------------------------
 
 
