@@ -69,6 +69,67 @@ def _doctor():
         print(f"  {a['name']:30s}  pid={a['pid']:6d}  bundle={a['bundle_id']}")
 
 
+def _setup() -> int:
+    """Interactive permissions wizard. Walks the four System Settings panes
+    that desktop-harness needs and waits for each to flip on."""
+    from .permissions import (
+        check_accessibility, check_screen_recording,
+        check_automation, doctor_permissions,
+    )
+    print(f"desktop-harness setup — v{__version__}")
+    print()
+    perms = doctor_permissions()
+
+    panes = [
+        ("Accessibility",
+         "System Settings → Privacy & Security → Accessibility",
+         "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+         "accessibility",
+         check_accessibility),
+        ("Screen Recording",
+         "System Settings → Privacy & Security → Screen Recording",
+         "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+         "screen_recording",
+         check_screen_recording),
+        ("Automation",
+         "System Settings → Privacy & Security → Automation",
+         "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
+         None,
+         None),
+        ("Input Monitoring",
+         "System Settings → Privacy & Security → Input Monitoring "
+         "(only needed for the action recorder)",
+         "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent",
+         None,
+         None),
+    ]
+
+    import subprocess
+    for name, where, url, key, checker in panes:
+        granted = perms.get(key) if key else None
+        flag = "✓" if granted else ("?" if granted is None else "✗")
+        print(f"[{flag}] {name}")
+        print(f"     {where}")
+        if granted is False:
+            print(f"     Opening pane…")
+            try:
+                subprocess.run(["open", url], check=False, timeout=5)
+            except Exception:
+                pass
+            print("     Toggle this app on, then press Enter to re-check.")
+            try:
+                input()
+            except EOFError:
+                pass
+            if checker is not None and not checker():
+                print(f"     Still not granted. You can re-run `desktop-harness --setup`.")
+        print()
+
+    print("Re-running diagnostics:")
+    _doctor()
+    return 0
+
+
 def _record(out_path: str, duration: float) -> int:
     from .recorder import Recorder
     print(f"Recording for {duration:.1f}s — interact with anything…", file=sys.stderr)
@@ -88,6 +149,64 @@ def _record(out_path: str, duration: float) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# v0.5.0 subcommands
+# ---------------------------------------------------------------------------
+
+def _print_json(o):
+    try:
+        print(json.dumps(o, indent=2, default=str))
+    except Exception:
+        print(repr(o))
+
+
+def _cmd_snapshot(app: str, max_elements: int, interactive_only: bool) -> int:
+    from .snapshot import accessibility_snapshot
+    snap = accessibility_snapshot(app, max_elements=max_elements,
+                                  interactive_only=interactive_only)
+    _print_json(snap)
+    return 0
+
+
+def _cmd_click(app: str | None, target: str) -> int:
+    from .smart import smart_click
+    _print_json(smart_click(target, app=app))
+    return 0
+
+
+def _cmd_type(app: str | None, target: str, text: str, clear: bool) -> int:
+    from .smart import smart_type
+    _print_json(smart_type(target, text, app=app, clear_first=clear))
+    return 0
+
+
+def _cmd_menu(app: str, menu_path: str) -> int:
+    from .smart import smart_menu
+    _print_json(smart_menu(app, menu_path))
+    return 0
+
+
+def _cmd_wait(app: str, role: str | None, title: str | None,
+              title_contains: str | None, timeout: float) -> int:
+    from .waiters import wait_for_element
+    _print_json(wait_for_element(app, role=role, title=title,
+                                  title_contains=title_contains, timeout=timeout))
+    return 0
+
+
+def _cmd_adapter(app: str | None, action: str | None, args_json: str | None) -> int:
+    from .adapters import list_adapters, adapter_actions, perform_adapter_action
+    if app is None:
+        _print_json(list_adapters())
+        return 0
+    if action is None:
+        _print_json(adapter_actions(app))
+        return 0
+    args = json.loads(args_json) if args_json else {}
+    _print_json(perform_adapter_action(app, action, **args))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="desktop-harness",
@@ -101,11 +220,49 @@ def main(argv: list[str] | None = None) -> int:
     p_record.add_argument("--out", required=True, help="Output path (.py or .json).")
     p_record.add_argument("--duration", type=float, default=15.0, help="Recording duration in seconds.")
 
-    p_demo = sub.add_parser("demo", help="Live walkthrough — list apps, dump TextEdit AX, take a screenshot.")
+    sub.add_parser("demo", help="Live walkthrough — list apps, dump TextEdit AX, take a screenshot.")
+
+    # v0.5.0 subcommands
+    p_snap = sub.add_parser("snapshot", help="Compact AX snapshot of an app (JSON).")
+    p_snap.add_argument("app")
+    p_snap.add_argument("--max-elements", type=int, default=500)
+    p_snap.add_argument("--all", action="store_true",
+                        help="Include non-interactive elements too.")
+
+    p_click = sub.add_parser("click", help="Smart click a label or ref in an app.")
+    p_click.add_argument("app", nargs="?")
+    p_click.add_argument("target")
+
+    p_type = sub.add_parser("type", help="Smart-focus a control and type text.")
+    p_type.add_argument("app", nargs="?")
+    p_type.add_argument("target")
+    p_type.add_argument("text")
+    p_type.add_argument("--clear", action="store_true",
+                        help="Clear existing value before typing (cmd+a, delete).")
+
+    p_menu = sub.add_parser("menu", help="Click an app menu by path: 'File > New Folder'.")
+    p_menu.add_argument("app")
+    p_menu.add_argument("menu_path")
+
+    p_wait = sub.add_parser("wait", help="Wait for an AX element to appear.")
+    p_wait.add_argument("app")
+    p_wait.add_argument("--role")
+    p_wait.add_argument("--title")
+    p_wait.add_argument("--title-contains")
+    p_wait.add_argument("--timeout", type=float, default=10.0)
+
+    p_adapter = sub.add_parser("adapter",
+                               help="List adapters, list adapter actions, or run an adapter action.")
+    p_adapter.add_argument("app", nargs="?", help="App name. Omit to list all adapters.")
+    p_adapter.add_argument("action", nargs="?",
+                           help="Action name. Omit to list available actions.")
+    p_adapter.add_argument("--args", help="JSON dict of kwargs for the action.")
 
     parser.add_argument("-c", "--code", help="Python expression / statements to evaluate.")
     parser.add_argument("-f", "--file", help="Run a Python file with all helpers in namespace.")
     parser.add_argument("--doctor", action="store_true", help="Diagnostics + permission status.")
+    parser.add_argument("--setup", action="store_true",
+                        help="Interactive permissions wizard.")
     parser.add_argument("--list-apps", action="store_true", help="List running apps as JSON.")
     parser.add_argument("--frontmost", action="store_true", help="Print the frontmost app.")
     parser.add_argument("--ax", metavar="APP", help="Dump AX tree of an app.")
@@ -125,9 +282,30 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "demo":
         return _demo()
 
+    if args.cmd == "snapshot":
+        return _cmd_snapshot(args.app, args.max_elements, not args.all)
+
+    if args.cmd == "click":
+        return _cmd_click(args.app, args.target)
+
+    if args.cmd == "type":
+        return _cmd_type(args.app, args.target, args.text, args.clear)
+
+    if args.cmd == "menu":
+        return _cmd_menu(args.app, args.menu_path)
+
+    if args.cmd == "wait":
+        return _cmd_wait(args.app, args.role, args.title, args.title_contains, args.timeout)
+
+    if args.cmd == "adapter":
+        return _cmd_adapter(args.app, args.action, args.args)
+
     if args.doctor:
         _doctor()
         return 0
+
+    if args.setup:
+        return _setup()
 
     if args.list_apps:
         from .apps import list_apps

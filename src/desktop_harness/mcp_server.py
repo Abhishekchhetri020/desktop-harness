@@ -980,6 +980,206 @@ def t_app_class(app: str):
     return _ok({"app": app, "class": app_class(app)})
 
 
+# --- v0.5.0: smart actions, waiters, safety, adapters ---------------------
+
+
+@tool(
+    "desktop_smart_click",
+    "Click the best match for a label or ref in an app. Tries adapter → AX exact → AX fuzzy → OCR → vision. Skips AX tiers for known Electron apps. Returns {ok, tier, ref, tried[], hint?, screenshot_path?}.",
+    {"type": "object", "properties": {
+        "target": {"type": "string", "description": "Label text or ElementRef id (r-xxxxxxxx)."},
+        "app": {"type": "string"},
+        "case_insensitive": {"type": "boolean", "default": True},
+        "use_vision_fallback": {"type": "boolean", "default": True},
+    }, "required": ["target"]},
+)
+def t_desktop_smart_click(target: str, app: str | None = None,
+                          case_insensitive: bool = True,
+                          use_vision_fallback: bool = True):
+    from .smart import smart_click
+    return smart_click(target, app=app, case_insensitive=case_insensitive,
+                       use_vision_fallback=use_vision_fallback)
+
+
+@tool(
+    "desktop_smart_type",
+    "Focus a control (by label or ref) and type text into it. Uses AX focus when possible, falls back to smart_click + type.",
+    {"type": "object", "properties": {
+        "target": {"type": "string"},
+        "text": {"type": "string"},
+        "app": {"type": "string"},
+        "clear_first": {"type": "boolean", "default": False},
+    }, "required": ["target", "text"]},
+)
+def t_desktop_smart_type(target: str, text: str, app: str | None = None, clear_first: bool = False):
+    from .smart import smart_type
+    return smart_type(target, text, app=app, clear_first=clear_first)
+
+
+@tool(
+    "desktop_smart_set_value",
+    "Set an AX element's value directly (text fields, sliders, switches). Faster than typing; falls back to type if the element refuses set_value.",
+    {"type": "object", "properties": {
+        "target": {"type": "string"},
+        "value": {"type": "string"},
+        "app": {"type": "string"},
+    }, "required": ["target", "value"]},
+)
+def t_desktop_smart_set_value(target: str, value: str, app: str | None = None):
+    from .smart import smart_set_value
+    return smart_set_value(target, value, app=app)
+
+
+@tool(
+    "desktop_smart_menu",
+    "Walk an app's menu by path, e.g. 'File > New Folder' or 'Edit > Find > Find Next'. Uses AX walk first, AppleScript System Events fallback.",
+    {"type": "object", "properties": {
+        "app": {"type": "string"},
+        "menu_path": {"type": "string", "description": "Use '>' as separator."},
+    }, "required": ["app", "menu_path"]},
+)
+def t_desktop_smart_menu(app: str, menu_path: str):
+    from .smart import smart_menu
+    return smart_menu(app, menu_path)
+
+
+@tool(
+    "desktop_smart_open",
+    "Launch an app by name OR open a file/folder path. Waits up to `wait` seconds for it to be running.",
+    {"type": "object", "properties": {
+        "app_or_path": {"type": "string"},
+        "wait": {"type": "number", "default": 5.0},
+    }, "required": ["app_or_path"]},
+)
+def t_desktop_smart_open(app_or_path: str, wait: float = 5.0):
+    from .smart import smart_open
+    return smart_open(app_or_path, wait=wait)
+
+
+@tool(
+    "desktop_wait_for_element",
+    "Block until an AX element matching the filters appears, or timeout. Returns {ok, ref, role, title, elapsed}. Avoids blind sleep loops.",
+    {"type": "object", "properties": {
+        "app": {"type": "string"},
+        "role": {"type": "string"},
+        "title": {"type": "string"},
+        "title_contains": {"type": "string"},
+        "identifier": {"type": "string"},
+        "timeout": {"type": "number", "default": 10.0},
+    }, "required": ["app"]},
+)
+def t_desktop_wait_for_element(app: str, role: str | None = None, title: str | None = None,
+                                title_contains: str | None = None, identifier: str | None = None,
+                                timeout: float = 10.0):
+    from .waiters import wait_for_element
+    return wait_for_element(app, role=role, title=title,
+                            title_contains=title_contains, identifier=identifier,
+                            timeout=timeout)
+
+
+@tool(
+    "desktop_wait_for_window",
+    "Block until a window with matching title appears in `app`. Returns {ok, window, elapsed}.",
+    {"type": "object", "properties": {
+        "app": {"type": "string"},
+        "title": {"type": "string"},
+        "title_contains": {"type": "string"},
+        "timeout": {"type": "number", "default": 10.0},
+    }, "required": ["app"]},
+)
+def t_desktop_wait_for_window(app: str, title: str | None = None,
+                               title_contains: str | None = None, timeout: float = 10.0):
+    from .waiters import wait_for_window
+    return wait_for_window(app, title=title, title_contains=title_contains, timeout=timeout)
+
+
+@tool(
+    "desktop_classify_risk",
+    "Classify an action's risk: safe / caution / destructive. Use BEFORE invoking adapter actions or smart_click on labels containing 'send' / 'delete' / 'submit'.",
+    {"type": "object", "properties": {
+        "action": {"type": "string"},
+        "target": {"type": "string"},
+        "app": {"type": "string"},
+    }, "required": ["action"]},
+)
+def t_desktop_classify_risk(action: str, target: str | None = None, app: str | None = None):
+    from .safety import classify_action_risk
+    risk = classify_action_risk(action, target=target, app=app)
+    return _ok({"action": action, "target": target, "app": app, "risk": risk})
+
+
+@tool(
+    "desktop_recent_actions",
+    "Last N actions logged via the safety wrapper. Diagnostics + audit.",
+    {"type": "object", "properties": {"n": {"type": "integer", "default": 20}}},
+)
+def t_desktop_recent_actions(n: int = 20):
+    from .safety import recent_actions
+    return _ok(recent_actions(n=n))
+
+
+@tool(
+    "desktop_list_adapters",
+    "List registered app adapters (Finder, Notes, Mail in v0.5.0). Each entry shows name, bundle_ids, app_class, safe_actions, dangerous_actions.",
+)
+def t_desktop_list_adapters():
+    from .adapters import list_adapters
+    return _ok(list_adapters())
+
+
+@tool(
+    "desktop_adapter_actions",
+    "List the actions exposed by an app's adapter. Returns safe vs dangerous splits.",
+    {"type": "object", "properties": {"app": {"type": "string"}}, "required": ["app"]},
+)
+def t_desktop_adapter_actions(app: str):
+    from .adapters import adapter_actions
+    return adapter_actions(app)
+
+
+@tool(
+    "desktop_perform_adapter_action",
+    "[POSSIBLY DESTRUCTIVE depending on action] Run a registered adapter action. "
+    "For destructive actions (Mail.send_email, Notes.delete_note, Finder.move_to_trash) "
+    "you MUST pass confirm=true or dry_run=true; otherwise ConfirmationRequired is raised.",
+    {"type": "object", "properties": {
+        "app": {"type": "string"},
+        "action": {"type": "string"},
+        "args": {"type": "object", "description": "Keyword args for the adapter action."},
+    }, "required": ["app", "action"]},
+)
+def t_desktop_perform_adapter_action(app: str, action: str, args: dict | None = None):
+    from .adapters import perform_adapter_action
+    return perform_adapter_action(app, action, **(args or {}))
+
+
+@tool(
+    "desktop_resolve_ref",
+    "Re-resolve an ElementRef to a live AX element. Returns {ok, ref, role, title, refound: bool, error?}.",
+    {"type": "object", "properties": {"ref": {"type": "string"}}, "required": ["ref"]},
+)
+def t_desktop_resolve_ref(ref: str):
+    from .refs import resolve_ref, get_ref, is_stale
+    el = resolve_ref(ref)
+    r = get_ref(ref)
+    if r is None or el is None:
+        return _err(f"could not resolve ref {ref!r}",
+                    hint="Take a fresh accessibility_snapshot() and use a new ref.")
+    return _ok({
+        "ref": r.id, "role": r.role, "title": r.title,
+        "app": r.app, "stale_at_creation": is_stale(r.id),
+    })
+
+
+@tool(
+    "desktop_list_refs",
+    "List every active ElementRef in this process (compact form). Diagnostics only.",
+)
+def t_desktop_list_refs():
+    from .refs import list_refs
+    return _ok(list_refs())
+
+
 # --- JSON-RPC dispatcher ---------------------------------------------------
 
 

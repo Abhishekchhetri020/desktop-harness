@@ -56,6 +56,8 @@ ELECTRON_APPS = frozenset({
     "com.github.GitHubClient",         # GitHub Desktop
     "ai.perplexity.mac",               # Perplexity
     "com.anthropic.claudefordesktop",  # Claude desktop (Electron-ish)
+    "com.google.antigravity",          # Google Antigravity (Chromium IDE)
+    "ai.opencowork.codesign",          # Open CoDesign (Electron + React 19)
 })
 
 # Bundle IDs with deep AppleScript dictionaries — prefer tell() over AX/vision.
