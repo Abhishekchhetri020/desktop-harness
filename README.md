@@ -40,6 +40,26 @@ API. desktop-harness uses that tree directly. You can:
 - Subscribe to `AXValueChanged` notifications and react when a text field is edited,
   without polling.
 
+### Honest capability matrix
+
+desktop-harness is **structured control first, screenshots last** — not "no screenshots
+ever". macOS itself can't see inside Electron apps, so for those we fall through to
+vision. Every smart action reports which tier it used.
+
+| App category | Examples | AX-only path | Vision required? |
+|---|---|---|---|
+| Apple's own apps | Notes, Mail, Calendar, Safari, Finder, Messages, System Settings, TextEdit, Music, Photos | ✅ instant | no |
+| Native Cocoa / SwiftUI | 1Password, Things 3, BBEdit, OmniFocus, MarsEdit | ✅ instant | no |
+| AppleScript-driveable | Mail, Calendar, Music, Numbers, Pages, Word, Excel, OmniFocus | ✅ via `tell()` | no |
+| Pure keyboard workflows | any app — `cmd+s`, `cmd+shift+p`, hotkeys | ✅ via CGEvent | no |
+| Electron / Chromium-shell | Slack, VS Code, Cursor, Obsidian, Discord, Notion, Figma, Linear, Spotify, Zoom, Warp, Arc, Perplexity, Claude desktop | ⚠️ AX is sparse | **yes** (auto-falls-through) |
+| Custom-rendered | Photoshop canvas, Final Cut timeline, Blender, games | ❌ AX empty | **yes** |
+| Java/JVM without AX bridge | older JetBrains, some enterprise tools | ❌ AX empty | **yes** |
+
+There is no API path on macOS to read DOM-level controls inside a Chromium frame. v0.5.0
+ships with the Electron registry pre-populated, so `smart_click` skips AX tiers entirely
+for those apps and goes straight to OCR/vision.
+
 Compared to pixel-driving:
 
 | | Pixel-based tools | **desktop-harness** |
@@ -50,9 +70,42 @@ Compared to pixel-driving:
 | AppleScript dictionaries | Not used | First-class via `tell()` / `jxa()` |
 | Live event subscriptions | No | `observe(app, "AXValueChanged", cb)` |
 | User-action recording | No | `desktop-harness record --out replay.py` |
-| MCP server for agents | No | `desktop-harness mcp` exposes 55 tools |
+| MCP server for agents | No | `desktop-harness mcp` exposes **78** tools |
 | CLI eval mode | No | `desktop-harness -c "expr"` |
 | Self-extending | No | `agent_helpers.py` + `domain-skills/*.md` |
+
+## v0.5.0 highlights
+
+- **Stable element refs** (`refs.py`). Refs survive across snapshots; they re-find by
+  path-replay when the AX handle goes stale (Playwright locator pattern for macOS).
+- **Smart action engine** (`smart_click` / `smart_type` / `smart_set_value` / `smart_menu`
+  / `smart_open`). Every call returns `{ok, tier, ref, tried[], hint?}`. AX-success path
+  never takes a screenshot; vision tier is reported explicitly when reached.
+- **Wait + verify primitives** (`wait_for_element`, `wait_until_value`, `wait_for_window`,
+  …). No more blind `time.sleep` loops.
+- **Safety layer** (`classify_action_risk`, `confirmed_action`). Destructive actions
+  (`send_email`, `delete_note`, `move_to_trash`, …) require `confirm=True` or
+  `dry_run=True`.
+- **App adapter registry** with three high-value adapters: Finder, Notes, Mail. Each
+  declares safe vs dangerous actions explicitly.
+- **78 MCP tools** (was 64) including `desktop_smart_click`, `desktop_perform_adapter_action`,
+  `desktop_wait_for_element`, `desktop_classify_risk`. Destructive tools clearly marked.
+- **CLI subcommands**: `snapshot`, `click`, `type`, `menu`, `wait`, `adapter`. `--setup`
+  wizard walks the four System Settings panes.
+
+### Why no daemon yet?
+
+browser-harness ships a daemon because Chrome DevTools Protocol is a stateful WebSocket.
+macOS Accessibility is **stateless RPC** — every call is independent and costs <5ms. A
+daemon would impose IPC latency, force JSON serialisation of volatile AXUIElement
+pointers (which don't survive across processes anyway), and add a process to manage —
+all for **zero functional benefit**. The MCP server already holds session state across
+tool calls; the CLI is intentionally stateless.
+
+A daemon becomes justified only when (a) we need state shared across separate CLI
+invocations, (b) macOS gains a CDP-equivalent persistent connection, or (c) parallel
+agents must share AX observer subscriptions. None of those apply today; we'll add it
+when reality demands it.
 
 ## Install
 

@@ -4,7 +4,7 @@ Public API is the union of these modules; the CLI exposes them as a flat namespa
 so `desktop-harness -c 'click_element(find("Notes", role="AXButton", title="New Note"))'`
 just works without imports.
 """
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from .apps import (
     list_apps, frontmost, open_app, activate, quit_app, is_running,
@@ -50,13 +50,45 @@ from .snapshot import (
 )
 from .vision import (
     app_class, is_electron, screenshot_with_grid, click_cell,
-    smart_click, vision_act, ELECTRON_APPS, APPLESCRIPT_APPS,
+    smart_click as _vision_smart_click, vision_act,
+    ELECTRON_APPS, APPLESCRIPT_APPS,
 )
 from .errors import (
     DesktopHarnessError, AccessibilityNotGranted, ScreenRecordingNotGranted,
     AutomationNotGranted, InputMonitoringNotGranted, AppNotRunning,
     WindowNotFound, ElementNotFound,
+    ConfirmationRequired, StaleElementRef,
 )
+
+# v0.5.0 additions ---------------------------------------------------------
+from .refs import (
+    ElementRef, create_element_ref, resolve_ref, refresh_ref,
+    re_find_element, is_stale, describe_element, element_bounds,
+    list_refs,
+    get_ref,
+)
+# smart_click v2 supersedes the v0.4 vision.smart_click (kept as
+# `_vision_smart_click` for tests / backwards compat). New code should use
+# the structured-result smart_click below.
+from .smart import (
+    smart_click, smart_type, smart_set_value, smart_menu, smart_open,
+)
+from .waiters import (
+    wait_for_app, wait_for_frontmost, wait_for_window,
+    wait_for_element, wait_until_value, wait_for_text,
+    verify_window_open, verify_text_present, verify_clicked,
+)
+from .safety import (
+    classify_action_risk, confirmed_action, recent_actions, clear_action_log,
+    DESTRUCTIVE_KEYWORDS, DESTRUCTIVE_PRONE_APPS,
+)
+from . import adapters
+from .adapters import (
+    Adapter, register as register_adapter, get_adapter,
+    list_adapters, adapter_actions, perform_adapter_action,
+    FinderAdapter, NotesAdapter, MailAdapter,
+)
+
 
 __all__ = [
     # apps
@@ -92,11 +124,30 @@ __all__ = [
     # snapshot (v0.3.0)
     "accessibility_snapshot", "click_text", "scrape_app", "batch_actions",
     "lookup_ref", "clear_refs", "INTERACTIVE_ROLES",
-    # vision tier (v0.4.0) — auto-falls-through, beats computer-use on Electron
+    # vision tier (v0.4.0)
     "app_class", "is_electron", "screenshot_with_grid", "click_cell",
-    "smart_click", "vision_act", "ELECTRON_APPS", "APPLESCRIPT_APPS",
+    "vision_act", "ELECTRON_APPS", "APPLESCRIPT_APPS",
     # errors
     "DesktopHarnessError", "AccessibilityNotGranted", "ScreenRecordingNotGranted",
     "AutomationNotGranted", "InputMonitoringNotGranted", "AppNotRunning",
     "WindowNotFound", "ElementNotFound",
+    "ConfirmationRequired", "StaleElementRef",
+    # v0.5.0: stable refs
+    "ElementRef", "create_element_ref", "resolve_ref", "refresh_ref",
+    "re_find_element", "is_stale", "describe_element", "element_bounds",
+    "list_refs", "get_ref",
+    # v0.5.0: smart actions (structured results)
+    "smart_click", "smart_type", "smart_set_value", "smart_menu", "smart_open",
+    # v0.5.0: waiters
+    "wait_for_app", "wait_for_frontmost", "wait_for_window",
+    "wait_for_element", "wait_until_value", "wait_for_text",
+    "verify_window_open", "verify_text_present", "verify_clicked",
+    # v0.5.0: safety
+    "classify_action_risk", "confirmed_action", "recent_actions",
+    "clear_action_log", "DESTRUCTIVE_KEYWORDS", "DESTRUCTIVE_PRONE_APPS",
+    # v0.5.0: adapters
+    "Adapter", "register_adapter", "get_adapter",
+    "list_adapters", "adapter_actions", "perform_adapter_action",
+    "FinderAdapter", "NotesAdapter", "MailAdapter",
+    "adapters",
 ]
